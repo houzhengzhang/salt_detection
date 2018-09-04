@@ -1,11 +1,15 @@
 {
   "exp_name": "salt_detection",
-  "train_tfrecord": "train.tfrecords",
-  "num_epochs": 10,
-  "num_iter_per_epoch": 10,
-  "learnint_rate": 0.001,
+  "train_tfrecord": "code/train.tfrecords",
+  "num_epochs": 100,
+  "num_iter_per_epoch": 62,
+  "learning_rate": 0.001,
   "batch_size": 64,
-  "state_size": [128,128],
+  "num_classes": 11,
+  "n_layers":5,
+  "init_channels":1,
+  "batch_norm":true,
+  "state_size": [128,128,1],
   "max_to_keep": 5,
   "buffer_size": 1000
 }

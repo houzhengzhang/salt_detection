@@ -7,11 +7,6 @@ import numpy as np
 import pandas as pd
 import six
 
-from random import randint
-
-import matplotlib.pyplot as plt
-import seaborn as sns
-
 from sklearn.model_selection import train_test_split
 
 from skimage.transform import resize
@@ -55,9 +50,6 @@ def upsample(img):
     if img_size_ori == img_size_target:
         return img
     return resize(img, (img_size_target, img_size_target), mode='constant', preserve_range=True)
-    # res = np.zeros((img_size_target, img_size_target), dtype=img.dtype)
-    # res[:img_size_ori, :img_size_ori] = img
-    # return res
 
 
 def downsample(img):
@@ -80,9 +72,11 @@ train_df["images"] = [np.array(load_img("../input/train/images/{}.png".format(id
 
 train_df["masks"] = [np.array(load_img("../input/train/masks/{}.png".format(idx),
                                        grayscale=True)) / 255 for idx in tqdm(train_df.index)]
+
 train_df["coverage"] = train_df.masks.map(np.sum) / pow(img_size_ori, 2)
 
 
+# 根据覆盖面积分为11个类
 def cov_to_class(val):
     for i in range(0, 11):
         if val * 10 <= i:
@@ -98,7 +92,6 @@ ids_train, ids_valid, x_train, x_valid, y_train, y_valid, cov_train, cov_test, d
     train_df.coverage.values,
     train_df.z.values,
     test_size=0.2, stratify=train_df.coverage_class, random_state=1337)
-
 
 ###################################
 #       Build U-Net Model         #
@@ -413,9 +406,6 @@ def UResNet34(input_shape=(None, None, 3), classes=1, decoder_filters=16, decode
     return model
 
 
-model = UResNet34(input_shape=(1, img_size_target, img_size_target))
-
-
 from keras.losses import binary_crossentropy
 from keras import backend as K
 
@@ -479,20 +469,34 @@ def weighted_bce_dice_loss(y_true, y_pred):
     return loss
 
 
-model.compile(loss=bce_dice_loss, optimizer="adam", metrics=["accuracy"])
+if __name__ == '__main__':
+    import os
+    import tensorflow as tf
 
-x_train = np.append(x_train, [np.fliplr(x) for x in x_train], axis=0)
-y_train = np.append(y_train, [np.fliplr(x) for x in y_train], axis=0)
+    os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 
-early_stopping = EarlyStopping(patience=10, verbose=1)
-model_checkpoint = ModelCheckpoint("./keras.model", save_best_only=True, verbose=1)
-reduce_lr = ReduceLROnPlateau(factor=0.1, patience=4, min_lr=0.00001, verbose=1)
+    config = tf.ConfigProto()
+    config.gpu_options.per_process_gpu_memory_fraction = 0.90  # 占用GPU90%的显存
+    K.set_session(tf.Session(config=config))
 
-epochs = 100
-batch_size = 32
+    # 创建模型
+    model = UResNet34(input_shape=(1, img_size_target, img_size_target))
+    # 创建优化器
+    opt = Adam(lr=0.001, beta_1=0.9, beta_2=0.999, epsilon=1e-08)
+    model.compile(loss=bce_dice_loss, optimizer=opt, metrics=["accuracy"])
 
-history = model.fit(x_train, y_train,
-                    validation_data=[x_valid, y_valid],
-                    epochs=epochs,
-                    batch_size=batch_size,
-                    callbacks=[early_stopping, model_checkpoint, reduce_lr], shuffle=True, verbose=1)
+    x_train = np.append(x_train, [np.fliplr(x) for x in x_train], axis=0)
+    y_train = np.append(y_train, [np.fliplr(x) for x in y_train], axis=0)
+
+    early_stopping = EarlyStopping(patience=10, verbose=1)
+    model_checkpoint = ModelCheckpoint("./salt.h5", save_best_only=True, verbose=1)
+    reduce_lr = ReduceLROnPlateau(factor=0.1, patience=4, min_lr=0.00001, verbose=1)
+
+    epochs = 200
+    batch_size = 32
+
+    history = model.fit(x_train, y_train,
+                        validation_data=[x_valid, y_valid],
+                        epochs=epochs,
+                        batch_size=batch_size,
+                        callbacks=[early_stopping, model_checkpoint, reduce_lr], shuffle=True, verbose=1)

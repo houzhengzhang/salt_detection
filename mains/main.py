@@ -4,10 +4,13 @@
 # @Time     : 2018/9/3 21:06 
 # @Software : PyCharm
 import tensorflow as tf
+import sys
+import os
+sys.path.append(os.path.abspath(os.path.join(os.getcwd(), "..")))
 
 from data_loader.data_generator import DataGenerator
-from models.example_model import ExampleModel
-from trainers.example_trainer import ExampleTrainer
+from models.u_net import UNet
+from trainers.unet_trainer import UNetTrainer
 from utils.config import process_config
 from utils.dirs import create_dirs
 from utils.logger import Logger
@@ -20,7 +23,8 @@ def main():
     try:
         args = get_args()
         config = process_config(args.config)
-    except FileNotFoundError:
+    except FileNotFoundError as e:
+        print(e)
         print("missing or invalid arguments")
         exit(0)
 
@@ -33,13 +37,13 @@ def main():
     data = DataGenerator(config)
 
     # create an model
-    model = ExampleModel(config)
+    model = UNet(config)
 
     # create tensorboard logger
     logger = Logger(sess, config)
 
     # create trainer and pass all the previous compoents to it
-    trainer = ExampleTrainer(sess, model, data, config, logger)
+    trainer = UNetTrainer(sess, model, data, config, logger)
 
     # load model if exists
     model.load(sess)

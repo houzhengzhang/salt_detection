@@ -9,6 +9,7 @@ import tensorflow as tf
 class DataGenerator:
     def __init__(self, config):
         self.config = config
+        self.input_fn()
 
     # 解析 tfrecord
     def parse_fn(self, example_proto):
