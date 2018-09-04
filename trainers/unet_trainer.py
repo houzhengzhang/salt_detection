@@ -28,7 +28,7 @@ class UNetTrainer(BaseTrain):
             "loss": loss,
             "acc": acc,
         }
-        print("Epoch {}: acc {},loss {}".format(cur_it, loss, acc))
+        print("Epoch {}: acc {},loss {}".format(cur_it, acc, loss))
         self.logger.summarize(cur_it, summaries_dict=summaries_dict)
         self.model.save(self.sess)
 

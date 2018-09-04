@@ -31,7 +31,13 @@ def main():
     # create the experiments dirs
     create_dirs([config.summary_dir, config.checkpoint_dir])
     # create tensorflow session
-    sess = tf.Session()
+    # 指定使用显卡
+    os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+
+    tf_config = tf.ConfigProto()
+    tf_config.gpu_options.per_process_gpu_memory_fraction = 0.90  # 占用GPU90%的显存
+
+    sess = tf.Session(config=tf_config)
 
     # create data generator
     data = DataGenerator(config)
