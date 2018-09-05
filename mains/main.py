@@ -10,6 +10,7 @@ sys.path.append(os.path.abspath(os.path.join(os.getcwd(), "..")))
 
 from data_loader.data_generator import DataGenerator
 from models.u_net import UNet
+from models.residual_unet import ResidualUNet
 from trainers.unet_trainer import UNetTrainer
 from utils.config import process_config
 from utils.dirs import create_dirs
@@ -35,7 +36,7 @@ def main():
     os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 
     tf_config = tf.ConfigProto()
-    tf_config.gpu_options.per_process_gpu_memory_fraction = 0.90  # 占用GPU90%的显存
+    tf_config.gpu_options.per_process_gpu_memory_fraction = 0.80  # 占用GPU90%的显存
 
     sess = tf.Session(config=tf_config)
 
@@ -43,7 +44,7 @@ def main():
     data = DataGenerator(config)
 
     # create an model
-    model = UNet(config)
+    model = ResidualUNet(config)
 
     # create tensorboard logger
     logger = Logger(sess, config)
@@ -56,6 +57,11 @@ def main():
 
     # train model
     trainer.train()
+
+    # usage
+    # pid 22308
+    # nohup python3 -u  main.py --c="./configs/config.json"  > logs.out 2>&1 &
+    # python3 main.py --c="./configs/config.json"
 
 
 if __name__ == '__main__':

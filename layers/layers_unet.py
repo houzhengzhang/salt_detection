@@ -5,6 +5,8 @@
 # @Software : PyCharm
 import tensorflow as tf
 
+slim = tf.contrib.slim
+
 
 def conv_module(input_, n_filters, training, name, pool=True, activation=tf.nn.relu, padding="same", batch_norm=True):
     """{Conv -> BN -> RELU} x 2 -> {Pool, optional}
@@ -46,3 +48,23 @@ def upsample(input_, name, upsacale_factor=(2, 2)):
     target_w = w * upsacale_factor[1]
 
     return tf.image.resize_nearest_neighbor(input_, (target_h, target_w), name="upsample_{}".format(name))
+
+
+def convolution_block(x, num_filters, name, kernel_size=(3, 3), activation=True):
+    with tf.variable_scope("convolution_block_{}".format(name)):
+        net = tf.layers.conv2d(x, num_filters, kernel_size, padding="same")
+        net = tf.layers.batch_normalization(net, renorm=True)
+        if activation:
+            net = tf.nn.relu(net, name="relu")
+    return net
+
+
+def residual_block(block_input, name, num_filters=16):
+    with tf.variable_scope("residual_block_{}".format(name)):
+        net = tf.nn.relu(block_input, name="relu")
+        net = tf.layers.batch_normalization(net, renorm=True, name="batch_normalization")
+        net = convolution_block(net, num_filters, name="1", kernel_size=(3, 3))
+        net = convolution_block(net, num_filters, name="2", kernel_size=(3, 3), activation=False)
+        # concat = tf.concat([net, block_input], axis=-1, name="concat1")  # axis =-1
+        concat = tf.add(net, block_input)
+    return concat

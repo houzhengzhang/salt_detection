@@ -4,7 +4,7 @@
 # @Time     : 2018/9/3 20:15 
 # @Software : PyCharm
 from base.base_model import BaseModel
-from models.losses import dice_loss
+from models.losses import bce_dice_loss, dice_loss
 import tensorflow as tf
 from layers.layers_unet import conv_module, upsample
 
@@ -59,7 +59,7 @@ class UNet(BaseModel):
             concat = tf.concat([up, conv_blocks[i - 1]], axis=-1, name="concat_{}".format(i))
             feed = conv_module(concat, ch, is_training, name="up_{}".format(i), batch_norm=batch_norm, pool=False)
 
-        logits = tf.layers.conv2d(feed, num_classes, (1, 1), name="logits", activation=None, padding="same")
+        logits = tf.layers.conv2d(feed, num_classes, (1, 1), name="logits", activation=tf.nn.sigmoid, padding="same")
 
         return logits
 
@@ -73,12 +73,15 @@ class UNet(BaseModel):
 
         with tf.name_scope("loss"):
             self.dice_loss = dice_loss(y_true=self.y, y_pred=logits)
-            self.train_step = tf.train.AdamOptimizer(self.config.learning_rate).minimize(self.dice_loss,
-                                                                                         global_step=self.global_step_tensor)
-            correct_prediction = tf.equal(tf.argmax(logits, 1), tf.argmax(self.y, 1))
-            self.accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
+
+        self.learning_rate = tf.train.exponential_decay(self.config.learning_rate, global_step=self.global_step_tensor,
+                                                        decay_steps=self.config.num_iter_per_epoch, decay_rate=0.9,
+                                                        staircase=True)
+        self.train_step = tf.train.AdamOptimizer(self.learning_rate).minimize(self.dice_loss,
+                                                                              global_step=self.global_step_tensor)
+        correct_prediction = tf.equal(tf.argmax(logits, 1), tf.argmax(self.y, 1))
+        self.accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
 
     def init_saver(self):
         # here you initialize the tensorflow saver that will be used in saving the checkpoints.
-        # self.saver = tf.train.Saver(max_to_keep=self.config.max_to_keep)
         self.saver = tf.train.Saver(max_to_keep=self.config.max_to_keep)

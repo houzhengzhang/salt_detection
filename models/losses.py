@@ -13,7 +13,7 @@ import tensorflow as tf
 # 1/F1 = 1/Precison + 1/Recall
 # F1 = 2 * TP /(2 * TP + FP + FN) = 2 |X ∩ Y| / (|X| + |Y|)
 
-def dice_loss(y_true, y_pred, axis=None, smooth=0.001):
+def dice_loss2(y_true, y_pred, axis=None, smooth=0.001):
     if axis is None:
         axis = [1, 2]
 
@@ -23,8 +23,21 @@ def dice_loss(y_true, y_pred, axis=None, smooth=0.001):
     intersection = tf.reduce_sum(y_true_f * y_pred_f, axis=axis)
     coefficient = (2. * intersection + smooth) / (tf.reduce_sum(y_true_f, axis=axis)
                                                   + tf.reduce_sum(y_pred_f, axis=axis) + smooth)
-    loss = 1. - tf.reduce_mean(coefficient)
-    return loss
+    # loss = 1. - tf.reduce_mean(coefficient)
+    return tf.reduce_mean(coefficient)
+
+
+def dice_loss(y_true, y_pred):
+    smooth = 1.
+    y_true_f = tf.contrib.layers.flatten(y_true)
+    y_pred_f = tf.contrib.layers.flatten(y_pred)
+    intersection = y_true_f * y_pred_f
+    score = (2. * tf.reduce_sum(intersection) + smooth) / (tf.reduce_sum(y_true_f) + tf.reduce_sum(y_pred_f) + smooth)
+    return 1. - score
+
+
+def bce_dice_loss(y_true, y_pred):
+    return pixel_wise_loss(pixel_logits=y_pred, gt_pixels=y_true) + dice_loss(y_true, y_pred)
 
 
 def pixel_wise_loss(pixel_logits, gt_pixels, pixel_weights=None):

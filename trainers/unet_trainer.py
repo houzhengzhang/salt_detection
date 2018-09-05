@@ -13,7 +13,9 @@ class UNetTrainer(BaseTrain):
         super(UNetTrainer, self).__init__(sess, model, data, config, logger)
 
     def train_epoch(self):
-        loop = tqdm(range(self.config.num_iter_per_epoch))
+        # loop = tqdm(range(self.config.num_iter_per_epoch))
+
+        loop = range(self.config.num_iter_per_epoch)
         losses = []
         accs = []
         for _ in loop:
@@ -37,6 +39,6 @@ class UNetTrainer(BaseTrain):
 
         feed_dict = {self.model.x: batch_data["images"], self.model.y: batch_data["masks"], self.model.is_training: True}
 
-        _, loss, acc = self.sess.run([self.model.train_step, self.model.dice_loss, self.model.accuracy],
+        _, loss, acc = self.sess.run([self.model.train_step, self.model.loss, self.model.accuracy],
                                      feed_dict=feed_dict)
         return loss, acc

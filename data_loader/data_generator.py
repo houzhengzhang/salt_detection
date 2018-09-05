@@ -22,12 +22,12 @@ class DataGenerator:
         parsed_example = tf.parse_single_example(example_proto, example_fmt)
 
         image = tf.decode_raw(parsed_example["images"], tf.float64)
-        image = tf.reshape(image, [128, 128])
+        image = tf.reshape(image, [101, 101])
         image = tf.expand_dims(image, -1)
         parsed_example["images"] = image
 
         masks = tf.decode_raw(parsed_example["masks"], tf.float64)
-        masks = tf.reshape(masks, [128, 128])
+        masks = tf.reshape(masks, [101, 101])
         masks = tf.expand_dims(masks, -1)
         parsed_example["masks"] = masks
 
