@@ -14,8 +14,7 @@ class DataGenerator:
     # 解析 tfrecord
     def parse_fn(self, example_proto):
         example_fmt = {"images": tf.FixedLenFeature([], tf.string),
-                       "masks": tf.FixedLenFeature([], tf.string),
-                       "coverage_class": tf.FixedLenFeature([], tf.int64)}
+                       "masks": tf.FixedLenFeature([], tf.string)}
         # {'coverage_class': <tf.Tensor 'ParseSingleExample/ParseSingleExample:0' shape=() dtype=int64>,
         # 'images': <tf.Tensor 'ParseSingleExample/ParseSingleExample:1' shape=() dtype=string>,
         # 'masks': <tf.Tensor 'ParseSingleExample/ParseSingleExample:2' shape=() dtype=string>}
@@ -31,7 +30,7 @@ class DataGenerator:
         masks = tf.expand_dims(masks, -1)
         parsed_example["masks"] = masks
 
-        parsed_example["coverage_class"] = parsed_example["coverage_class"]
+        # parsed_example["coverage_class"] = parsed_example["coverage_class"]
         return parsed_example
 
     def input_fn(self):
