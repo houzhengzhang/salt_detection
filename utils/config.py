@@ -29,7 +29,8 @@ def process_config(json_file):
     config, _ = get_config_from_json(json_file)
     config.summary_dir = os.path.join("../experiments", config.exp_name, "summary/")
     config.checkpoint_dir = os.path.join("../experiments", config.exp_name, "checkpoint/")
-    config.train_tfrecord = os.path.join(root_dir, config.train_tfrecord)
+    config.train_tfrecord = os.path.join(root_dir, "input", config.train_tfrecord_name)
+    config.valid_tfrecord = os.path.join(root_dir, "input", config.valid_tfrecord_name)
     return config
 
 

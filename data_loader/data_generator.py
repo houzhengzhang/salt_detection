@@ -8,11 +8,11 @@ import tensorflow as tf
 
 class DataGenerator:
     def __init__(self, config):
-        self.config = config
-        self.input_fn()
+        self.__config = config
+        self.__input_fn()
 
     # 解析 tfrecord
-    def parse_fn(self, example_proto):
+    def __parse_fn(self, example_proto):
         example_fmt = {"images": tf.FixedLenFeature([], tf.string),
                        "masks": tf.FixedLenFeature([], tf.string)}
         # {'coverage_class': <tf.Tensor 'ParseSingleExample/ParseSingleExample:0' shape=() dtype=int64>,
@@ -33,18 +33,22 @@ class DataGenerator:
         # parsed_example["coverage_class"] = parsed_example["coverage_class"]
         return parsed_example
 
-    def input_fn(self):
-        dataset = tf.data.TFRecordDataset(self.config.train_tfrecord)
+    def __input_fn(self):
+        dataset = tf.data.TFRecordDataset(self.__config.train_tfrecord)
         # When possible, we recommend using the fused tf.contrib.data.shuffle_and_repeat transformation,
         # which combines the best of both worlds (good performance and strong ordering guarantees).
         # Otherwise, we recommend shuffling before repeating.
-        dataset = dataset.apply(tf.contrib.data.shuffle_and_repeat(buffer_size=self.config.buffer_size,
-                                                                   count=self.config.num_epochs))
-        dataset = dataset.map(self.parse_fn)
-        dataset = dataset.batch(self.config.batch_size)
+        dataset = dataset.apply(tf.contrib.data.shuffle_and_repeat(buffer_size=self.__config.buffer_size,
+                                                                   count=self.__config.num_epochs))
+        dataset = dataset.map(self.__parse_fn)
+        dataset = dataset.batch(self.__config.batch_size)
 
         # 定义迭代器
-        self.next_element = dataset.make_one_shot_iterator().get_next()
+        self.__next_element = dataset.make_one_shot_iterator().get_next()
 
     def next_batch(self):
-        return self.next_element
+        return self.__next_element
+
+
+if __name__ == '__main__':
+    data = DataGenerator(None)

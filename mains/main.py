@@ -9,6 +9,7 @@ import os
 sys.path.append(os.path.abspath(os.path.join(os.getcwd(), "..")))
 
 from data_loader.data_generator import DataGenerator
+from data_loader.valid_data_generator import ValidDataGenerator
 from models.u_net import UNet
 from models.residual_unet import ResidualUNet
 from trainers.unet_trainer import UNetTrainer
@@ -41,7 +42,8 @@ def main():
     sess = tf.Session(config=tf_config)
 
     # create data generator
-    data = DataGenerator(config)
+    train_data = DataGenerator(config)
+    valid_data = ValidDataGenerator(config)
 
     # create an model
     model = ResidualUNet(config)
@@ -50,7 +52,7 @@ def main():
     logger = Logger(sess, config)
 
     # create trainer and pass all the previous compoents to it
-    trainer = UNetTrainer(sess, model, data, config, logger)
+    trainer = UNetTrainer(sess, model, train_data, valid_data, config, logger)
 
     # load model if exists
     model.load(sess)
@@ -59,8 +61,8 @@ def main():
     trainer.train()
 
     # usage
-    # pid 22308
-    # nohup python3 -u  main.py --c="./configs/config.json"  > logs.out 2>&1 &
+    # pid 25016
+    # nohup python3 -u  main.py --c="../configs/config.json"  > logs.out 2>&1 &
     # python3 main.py --c="./configs/config.json"
 
 

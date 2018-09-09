@@ -16,7 +16,7 @@ class ResidualUNet(BaseModel):
         self.build_model()
         self.init_saver()
 
-    def build_net(self, input, start_neurons, dropout_ratio=0.5, is_training=False):
+    def build_net(self, input, start_neurons, dropout_ratio=0.5):
         # Number of classes
         num_classes = self.config.num_classes
         # Number of times to downsample/upsample
@@ -57,12 +57,12 @@ class ResidualUNet(BaseModel):
         return logits
 
     def build_model(self):
-        self.is_training = tf.placeholder(tf.bool)
+        self.dropout = tf.placeholder(tf.float32)
 
         self.x = tf.placeholder(tf.float32, shape=[None] + self.config.state_size)
         self.y = tf.placeholder(tf.float32, shape=[None] + self.config.state_size)
 
-        logits = self.build_net(self.x, start_neurons=16, dropout_ratio=0.5, is_training=self.is_training)
+        logits = self.build_net(self.x, start_neurons=16, dropout_ratio=self.dropout)
 
         with tf.name_scope("loss"):
             self.cross_entropy = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=logits, labels=self.y))
@@ -74,8 +74,8 @@ class ResidualUNet(BaseModel):
                                                                               global_step=self.global_step_tensor)
         self.iou_mertic = my_iou_metric(label=self.y, pred=logits)
 
-        correct_prediction = tf.equal(tf.argmax(logits, 1), tf.argmax(self.y, 1))
-        self.accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
+        # correct_prediction = tf.equal(tf.argmax(logits, 1), tf.argmax(self.y, 1))
+        # self.accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
 
     def init_saver(self):
         self.saver = tf.train.Saver(max_to_keep=self.config.max_to_keep)
