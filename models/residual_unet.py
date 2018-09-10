@@ -5,7 +5,7 @@
 # @Software : PyCharm
 import tensorflow as tf
 from base.base_model import BaseModel
-from layers.layers_unet import residual_block, conv_module, encoder_conv, decoder_conv
+from layers.layers_unet import residual_block, encoder_conv, decoder_conv
 from models.iou_metric import my_iou_metric
 
 
