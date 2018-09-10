@@ -21,12 +21,16 @@ class UNetTrainer(BaseTrain):
             self.sess.run(self.model.increment_cur_epoch_tensor)
 
     def train_epoch(self):
-        loop = tqdm(range(self.config.num_iter_per_epoch))
-        # loop = range(self.config.num_iter_per_epoch)
+        # loop = tqdm(range(self.config.num_iter_per_epoch))
+        loop = range(self.config.num_iter_per_epoch)
         losses = []
         iou_mertic = []
         for _ in loop:
-            loss, iou = self.train_step()
+            try:
+                loss, iou = self.train_step()
+            except tf.errors.OutOfRangeError:
+                print("train finished!")
+                exit(0)
             losses.append(loss)
             iou_mertic.append(iou)
 
@@ -56,36 +60,31 @@ class UNetTrainer(BaseTrain):
     def train_step(self):
         # 获取 batch 数据
         batch_data = self.sess.run(self.train_data.next_batch())
-        feed_dict = {self.model.x: batch_data["images"], self.model.y: batch_data["masks"],
-                     self.model.dropout: 0.5}
+        feed_dict = {self.model.x: batch_data["images"], self.model.y: batch_data["masks"], self.model.is_training: True}
 
         _, loss, iou_mertic = self.sess.run(
-            [self.model.train_step, self.model.cross_entropy, self.model.iou_mertic],
-            feed_dict=feed_dict)
+            [self.model.train_step, self.model.cross_entropy, self.model.iou_mertic], feed_dict=feed_dict)
+
         return loss, iou_mertic
 
     def valid(self):
         iterator = self.valid_data.get_iterator()
         next_batch = iterator.get_next()
+        # 初始化迭代器
         self.sess.run(iterator.initializer)
         losses = []
         iou_mertic = []
 
-        i = 0
         while True:
             try:
                 batch_data = self.sess.run(next_batch)
                 feed_dict = {self.model.x: batch_data["images"], self.model.y: batch_data["masks"],
-                             self.model.dropout: 1.0}
+                             self.model.is_training: False}
                 _, loss, iou = self.sess.run(
                     [self.model.train_step, self.model.cross_entropy, self.model.iou_mertic],
                     feed_dict=feed_dict)
                 losses.append(loss)
                 iou_mertic.append(iou)
-                i += 1
-
-                if i == 3:
-                    return np.mean(losses), np.mean(iou_mertic)
             except tf.errors.OutOfRangeError:
                 # 验证集测试完成
                 pass
