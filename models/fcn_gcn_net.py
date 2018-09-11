@@ -12,6 +12,8 @@ from models.iou_metric import my_iou_metric
 class FCNGCNnet(BaseModel):
     def __init__(self, config):
         super(FCNGCNnet, self).__init__(config)
+        self.init_saver()
+        self.build_model()
 
     def build_net(self, input, is_training=True):
         """Based on https://arxiv.org/abs/1703.02719 but using VGG style base
@@ -22,7 +24,7 @@ class FCNGCNnet(BaseModel):
                  output (4-D Tensor): (N, H, W, n)
                      Logits classifying each pixel as either 'car' (1) or 'not car' (0)
              """
-        num_classes = 11
+        num_classes = 1
         k_gcn = 3
         init_channels = self.config.init_channels  # Number of channels in the first conv layer
         n_layers = self.config.n_layers  # Number of times to downsample/upsample
@@ -46,11 +48,14 @@ class FCNGCNnet(BaseModel):
         conv_blocks.append(last_conv)
 
         # global convolution network
+        ch = init_channels
         global_conv_blocks = []
         for i in range(n):
+            print("conv_blocks:{}".format(conv_blocks[i].shape))
             global_conv_blocks.append(
-                global_conv_module(conv_blocks[i], num_classes, is_training,
+                global_conv_module(conv_blocks[i], 21, is_training,
                                    k=k_gcn, name=str(i + 1)))
+            print("global_conv_blocks:{}".format(global_conv_blocks[i].shape))
 
         # boundary refinement
         br_blocks = []
@@ -61,17 +66,19 @@ class FCNGCNnet(BaseModel):
         # decoder / upsampling
         up_blocks = []
         last_br = br_blocks[-1]
+
         for i in range(n - 1, 0, -1):
-            deconv = deconv_module(last_br, name=str(i + 1), stride=2, kernel_size=4)
+            ch = br_blocks[i-1].get_shape()[3].value
+            deconv = deconv_module(last_br, int(ch), name=str(i + 1), stride=2, kernel_size=4)
             up = tf.add(deconv, br_blocks[i - 1])
             last_br = boundary_refine(up, is_training, name='up_' + str(i))
             up_blocks.append(up)
 
-        logits = last_br
+        logits = tf.layers.conv2d(last_br, filters=1, kernel_size=(1, 1), padding="same", name="logits", activation=None)
         return logits
 
     def build_model(self):
-        self.is_training = tf.placeholder(tf.bool)
+        self.is_training = tf.placeholder(tf.bool, name="is_training")
 
         self.x = tf.placeholder(tf.float32, shape=[None] + self.config.state_size)
         self.y = tf.placeholder(tf.float32, shape=[None] + self.config.state_size)

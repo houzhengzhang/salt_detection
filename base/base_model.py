@@ -17,7 +17,9 @@ class BaseModel:
     # save function that saves the checkpoint in the path defined in the config file
     def save(self, sess):
         print("Saving model")
-        self.saver.save(sess, self.config.checkpoint_dir, self.global_step_tensor)
+        # 保存非训练参数
+        saver = tf.train.Saver(var_list=tf.global_variables(), max_to_keep=self.config.max_to_keep)
+        saver.save(sess, self.config.checkpoint_dir, self.global_step_tensor)
         print("Model saved")
 
     # load latest checkpoint from the experiment path defined in the config file
