@@ -10,8 +10,26 @@ from tqdm import tqdm
 import tensorflow as tf
 from keras.preprocessing.image import load_img
 from collections import defaultdict
+import sys
 import os
+
+sys.path.append(os.path.abspath(os.path.join(os.getcwd(), "..")))
 from utils.tf_utils import _bytes_feature
+
+img_size_ori = 101
+img_size_target = 128
+
+
+def upsample(img):
+    if img_size_ori == img_size_target:
+        return img
+    return resize(img, (img_size_target, img_size_target), mode='constant', preserve_range=True)
+
+
+def downsample(img):
+    if img_size_ori == img_size_target:
+        return img
+    return resize(img, (img_size_ori, img_size_ori), mode='constant', preserve_range=True)
 
 
 # 根据覆盖面积分为11个类
@@ -33,7 +51,7 @@ def read_data(traincsv_dir, depthcsv_dir, train_dir):
     train_df["masks"] = [np.array(load_img(os.path.join(train_dir, "masks/{}.png".format(idx)),
                                            grayscale=True)) / 255 for idx in tqdm(train_df.index)]
 
-    train_df["coverage"] = train_df.masks.map(np.sum) / pow(101, 2)
+    train_df["coverage"] = train_df.masks.map(np.sum) / pow(img_size_target, 2)
 
     train_df["coverage_class"] = train_df.coverage.map(cov_to_class)
     del train_df["z"]
@@ -69,8 +87,17 @@ def train_test_split(data_dict, split_scale=0.9):
             valid_masks.append(masks)
 
     # 数据集扩增
-    train_images = np.append(train_images, [np.fliplr(x) for x in train_images], axis=0)
-    train_masks = np.append(train_masks, [np.fliplr(x) for x in train_masks], axis=0)
+    # 左右翻转
+    train_images_lr = [np.fliplr(x) for x in train_images]
+    # 上下翻转
+    train_images_ud = [np.flipud(x) for x in train_images]
+    train_images = np.append(train_images, train_images_lr, axis=0)
+    train_images = np.append(train_images, train_images_ud, axis=0)
+
+    train_masks_lr = [np.fliplr(x) for x in train_masks]
+    train_masks_ud = [np.flipud(x) for x in train_masks]
+    train_masks = np.append(train_masks, train_masks_lr, axis=0)
+    train_masks = np.append(train_masks, train_masks_ud, axis=0)
 
     valid_images = np.append(valid_images, [np.fliplr(x) for x in valid_images], axis=0)
     valid_masks = np.append(valid_masks, [np.fliplr(x) for x in valid_masks], axis=0)
@@ -81,10 +108,10 @@ def train_test_split(data_dict, split_scale=0.9):
 def write_tfrecord(tfrecord_path, x_train, y_train):
     with tf.python_io.TFRecordWriter(tfrecord_path) as tfrecord_writer:
         for img, mask in tqdm(zip(x_train, y_train), total=len(x_train)):
-            # img_data = upsample(getattr(row, "images")).tobytes()
-            # mask_data = upsample(getattr(row, "masks")).tobytes()
-            img_data = img.tobytes()
-            mask_data = mask.tobytes()
+            img_data = upsample(img).tobytes()
+            mask_data = upsample(mask).tobytes()
+            # img_data = img.tobytes()
+            # mask_data = mask.tobytes()
             # create features
             feature = {'images': _bytes_feature(img_data),
                        'masks': _bytes_feature(mask_data)}
