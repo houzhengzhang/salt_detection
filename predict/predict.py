@@ -24,89 +24,38 @@ class Model:
         self.load_weight()
         print("weight load done!")
 
-    def build_fcn_net(self, input, is_training=True):
-        num_classes = 1
-        k_gcn = 3
-        init_channels = 64  # Number of channels in the first conv layer
-        n_layers = 4  # Number of times to downsample/upsample
-        batch_norm = is_training  # if True, use batch-norm
-
-        # color-space adjustment
-        net = tf.layers.conv2d(input, 3, (1, 1), name="color_space_adjust")
-        n = n_layers
-
-        # encoder
-        feed = net
-        ch = init_channels
-        conv_blocks = []
-        for i in range(n - 1):
-            conv, feed = conv_module(feed, ch, is_training, name=str(i + 1),
-                                     batch_norm=batch_norm)
-            conv_blocks.append(conv)
-            ch *= 2
-        last_conv = conv_module(feed, ch, is_training, name=str(n), pool=False,
-                                batch_norm=batch_norm)
-        conv_blocks.append(last_conv)
-
-        # global convolution network
-        ch = init_channels
-        global_conv_blocks = []
-        for i in range(n):
-            print("conv_blocks:{}".format(conv_blocks[i].shape))
-            global_conv_blocks.append(
-                global_conv_module(conv_blocks[i], 21, is_training,
-                                   k=k_gcn, name=str(i + 1)))
-            print("global_conv_blocks:{}".format(global_conv_blocks[i].shape))
-
-        # boundary refinement
-        br_blocks = []
-        for i in range(n):
-            br_blocks.append(boundary_refine(global_conv_blocks[i], is_training,
-                                             name=str(i + 1), batch_norm=batch_norm))
-
-        # decoder / upsampling
-        up_blocks = []
-        last_br = br_blocks[-1]
-
-        for i in range(n - 1, 0, -1):
-            ch = br_blocks[i - 1].get_shape()[3].value
-            deconv = deconv_module(last_br, int(ch), name=str(i + 1), stride=2, kernel_size=4)
-            up = tf.add(deconv, br_blocks[i - 1])
-            last_br = boundary_refine(up, is_training, name='up_' + str(i))
-            up_blocks.append(up)
-
-        logits = tf.layers.conv2d(last_br, filters=1, kernel_size=(1, 1), padding="same", name="logits",
-                                  activation=None)
-        return logits
-
     def load_weight(self):
         latest_checkpoint = tf.train.latest_checkpoint(self.checkpoint_dir)
         # 获取默认图
         tf_config = tf.ConfigProto()
         tf_config.gpu_options.per_process_gpu_memory_fraction = 0.80  # 占用GPU90%的显存
-        # self.graph = tf.get_default_graph()
-        self.is_training = tf.placeholder(tf.bool, name="is_training")
-        self.x = tf.placeholder(tf.float32, shape=[None, 128, 128, 1])
+        self.graph = tf.get_default_graph()
+        # self.is_training = tf.placeholder(tf.bool, name="is_training")
+        # self.x = tf.placeholder(tf.float32, shape=[None, 128, 128, 1])
 
-        self.fcn_model = self.build_fcn_net(self.x, self.is_training)
+        # self.fcn_model = self.build_fcn_net(self.x, self.is_training)
         self.sess = tf.Session(config=tf_config)
-        self.saver = tf.train.Saver()
-        # self.saver = tf.train.import_meta_graph(self.graph_name)
+        # self.saver = tf.train.Saver()
+        self.saver = tf.train.import_meta_graph(self.graph_name)
         # init = tf.group(tf.global_variables_initializer(), tf.local_variables_initializer())
         # self.sess.run(init)
         self.saver.restore(self.sess, latest_checkpoint)
 
-        # g_list = tf.global_variables()
+        # g_list = self.graph.get_operations()
         # for g in g_list:
-        #     print(g)
+        #     print(g.name)
 
-        # self.input_op = self.graph.get_operation_by_name("Placeholder_1").outputs[0]
-        # # self.logits = self.graph.get_operation_by_name("logits/Conv2D").outputs[0]
+        # ********************************* #
+        # bug  Placeholder 1#
+        # ********************************* #
+        self.input_op = self.graph.get_operation_by_name("Placeholder").outputs[0]
         # self.logits = self.graph.get_operation_by_name("logits/Conv2D").outputs[0]
-        # self.is_training = self.graph.get_operation_by_name("is_training").outputs[0]
+        self.logits = self.graph.get_operation_by_name("logits/Conv2D").outputs[0]
+        self.is_training = self.graph.get_operation_by_name("is_training").outputs[0]
 
     def predict(self, input):
-        logits = self.sess.run(self.fcn_model, feed_dict={self.x: input, self.is_training: False})
+        # logits = self.sess.run(self.fcn_model, feed_dict={self.x: input, self.is_training: False})
+        logits = self.sess.run(self.logits, feed_dict={self.input_op: input, self.is_training: False})
         return logits
 
 
@@ -154,6 +103,12 @@ img_size_target = 128
 
 
 def downsample(img):
+    if img_size_ori == img_size_target:
+        return img
+    return resize(img, (img_size_ori, img_size_ori), mode='constant', preserve_range=True)
+
+
+def upsample(img):
     if img_size_ori == img_size_target:
         return img
     return resize(img, (img_size_target, img_size_target), mode='constant', preserve_range=True)
@@ -218,7 +173,7 @@ if __name__ == '__main__':
 
     root_dir = os.path.abspath(os.path.join(os.getcwd(), ".."))
     checkpoint_dir = os.path.join(root_dir, "experiments/salt_detection/checkpoint")
-    graph_path = os.path.join(checkpoint_dir, "-840.meta")
+    graph_path = os.path.join(checkpoint_dir, "-845.meta")
     model = Model(checkpoint_dir, graph_path)
     # 计算阈值
     threshold_best = compute_thresholds(model)
@@ -231,10 +186,12 @@ if __name__ == '__main__':
     test_image = [np.array(load_img(os.path.join(test_dir, img_name), grayscale=True))[:, :, np.newaxis] / 255.0
                   for img_name in tqdm(test_list)]
 
-    preds_test = [model.predict(downsample(image)[np.newaxis, :, :, :]) for image in tqdm(test_image)]
+    preds_test = [model.predict(upsample(image)[np.newaxis, :, :, :]) for image in tqdm(test_image)]
 
-    pred_dict = {id[:-4]: rlenc(np.round(image) > threshold_best) for image, id in tqdm(zip(preds_test, test_list),
-                                                                                        total=len(preds_test))}
+    pred_dict = {
+        id[:-4]: rlenc(np.round(downsample(image.reshape((img_size_target, img_size_target)))) > threshold_best) for
+        image, id in
+        tqdm(zip(preds_test, test_list), total=len(preds_test))}
 
     sub = pd.DataFrame.from_dict(pred_dict, orient='index')
     sub.index.names = ['id']
