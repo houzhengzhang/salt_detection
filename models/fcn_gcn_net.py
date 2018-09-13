@@ -12,8 +12,9 @@ from models.iou_metric import my_iou_metric
 class FCNGCNnet(BaseModel):
     def __init__(self, config):
         super(FCNGCNnet, self).__init__(config)
-        self.init_saver()
+        # 先建立模型，再初始化saver
         self.build_model()
+        self.init_saver()
 
     def build_net(self, input, is_training=True):
         """Based on https://arxiv.org/abs/1703.02719 but using VGG style base
@@ -48,33 +49,39 @@ class FCNGCNnet(BaseModel):
         conv_blocks.append(last_conv)
 
         # global convolution network
-        ch = init_channels
+        ch = init_channels / 2
         global_conv_blocks = []
         for i in range(n):
-            print("conv_blocks:{}".format(conv_blocks[i].shape))
+            print("conv_blocks_{}:{}".format(i, conv_blocks[i].shape))
             global_conv_blocks.append(
-                global_conv_module(conv_blocks[i], 21, is_training,
-                                   k=k_gcn, name=str(i + 1)))
-            print("global_conv_blocks:{}".format(global_conv_blocks[i].shape))
+                global_conv_module(conv_blocks[i], ch, k=k_gcn, name=str(i + 1)))
+            ch *= 2
+            print("global_conv_blocks_{}:{}".format(i, global_conv_blocks[i].shape))
 
         # boundary refinement
         br_blocks = []
         for i in range(n):
             br_blocks.append(boundary_refine(global_conv_blocks[i], is_training,
                                              name=str(i + 1), batch_norm=batch_norm))
+            print("br_blocks_{}:{}".format(i, br_blocks[i].shape))
 
         # decoder / upsampling
         up_blocks = []
         last_br = br_blocks[-1]
 
         for i in range(n - 1, 0, -1):
-            ch = br_blocks[i-1].get_shape()[3].value
+            ch = br_blocks[i - 1].get_shape()[3].value
             deconv = deconv_module(last_br, int(ch), name=str(i + 1), stride=2, kernel_size=4)
             up = tf.add(deconv, br_blocks[i - 1])
             last_br = boundary_refine(up, is_training, name='up_' + str(i))
             up_blocks.append(up)
 
-        logits = tf.layers.conv2d(last_br, filters=1, kernel_size=(1, 1), padding="same", name="logits", activation=None)
+        for idx, block in enumerate(up_blocks):
+            print("up_blocks_{}:{}".format(idx, block.shape))
+
+        logits = tf.layers.conv2d(last_br, filters=1, kernel_size=(1, 1), padding="same", name="logits",
+                                  activation=None)
+
         return logits
 
     def build_model(self):
@@ -88,11 +95,17 @@ class FCNGCNnet(BaseModel):
         with tf.name_scope("loss"):
             self.cross_entropy = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=logits, labels=self.y))
 
+        # decayed_learning_rate = learning_rate *
+        #                           decay_rate ^ (global_step / decay_steps)
         self.learning_rate = tf.train.exponential_decay(self.config.learning_rate, global_step=self.global_step_tensor,
-                                                        decay_steps=self.config.num_iter_per_epoch, decay_rate=0.9,
+                                                        decay_steps=2000, decay_rate=0.9,
                                                         staircase=True)
-        self.train_step = tf.train.AdamOptimizer(self.learning_rate).minimize(self.cross_entropy,
-                                                                              global_step=self.global_step_tensor)
+
+        # BN 参数
+        extra_update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
+        with tf.control_dependencies(extra_update_ops):
+            self.train_step = tf.train.AdamOptimizer(self.learning_rate).minimize(self.cross_entropy,
+                                                                                  global_step=self.global_step_tensor)
         self.iou_mertic = my_iou_metric(label=self.y, pred=logits)
 
     def init_saver(self):
