@@ -36,28 +36,33 @@ class ResidualUNet(BaseModel):
         convm = encoder_conv(feed, start_neurons, dropout_ratio=1.0, name="down_{}".format(n_layers + 1), pooling=False)
         conv_blocks.append(convm)
 
+        for conv in conv_blocks:
+            print("conv_shape:{}".format(conv.shape))
+
         # decoder
         feed = conv_blocks[-1]
         for i in range(n_layers, 0, -1):
-            if i % 2:
-                padding = "valid"
-            else:
-                padding = "same"
+            # if i % 2:
+            #     padding = "valid"
+            # else:
+            #     padding = "same"
             start_neurons /= 2
             up = tf.layers.conv2d_transpose(feed, int(start_neurons), kernel_size=(3, 3), strides=(2, 2),
-                                            padding=padding)
+                                            padding="same")
+            print("up:{}".format(up.shape))
 
             concat = tf.concat([up, conv_blocks[i - 1]], axis=-1, name="concat_".format(i))
             dropout = tf.layers.dropout(concat, dropout_ratio)
             feed = decoder_conv(dropout, start_neurons, name="up_{}".format(i))
 
         output = tf.layers.dropout(feed, dropout_ratio / 2)
-        logits = tf.layers.conv2d(output, filters=1, kernel_size=(1, 1), padding="same", name="logits", activation=None)
+        logits = tf.layers.conv2d(output, filters=num_classes, kernel_size=(1, 1), padding="same", name="logits",
+                                  activation=None)
 
         return logits
 
     def build_model(self):
-        self.dropout = tf.placeholder(tf.float32)
+        self.dropout = tf.placeholder(tf.float32, name="dropout")
 
         self.x = tf.placeholder(tf.float32, shape=[None] + self.config.state_size)
         self.y = tf.placeholder(tf.float32, shape=[None] + self.config.state_size)
@@ -68,14 +73,11 @@ class ResidualUNet(BaseModel):
             self.cross_entropy = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=logits, labels=self.y))
 
         self.learning_rate = tf.train.exponential_decay(self.config.learning_rate, global_step=self.global_step_tensor,
-                                                        decay_steps=self.config.num_iter_per_epoch, decay_rate=0.9,
+                                                        decay_steps=3000, decay_rate=0.9,
                                                         staircase=True)
         self.train_step = tf.train.AdamOptimizer(self.learning_rate).minimize(self.cross_entropy,
                                                                               global_step=self.global_step_tensor)
         self.iou_mertic = my_iou_metric(label=self.y, pred=logits)
-
-        # correct_prediction = tf.equal(tf.argmax(logits, 1), tf.argmax(self.y, 1))
-        # self.accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
 
     def init_saver(self):
         self.saver = tf.train.Saver(max_to_keep=self.config.max_to_keep)
